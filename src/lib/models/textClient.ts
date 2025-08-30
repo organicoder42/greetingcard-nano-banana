@@ -33,17 +33,33 @@ export class GeminiTextClient {
       const response = await result.response;
       const text = response.text();
 
+      // Clean up response text (remove markdown markers, extra whitespace)
+      let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      
       // Try to parse JSON response
       let jsonResponse;
       try {
-        jsonResponse = JSON.parse(text);
+        jsonResponse = JSON.parse(cleanText);
       } catch {
-        // Fallback: extract content manually if JSON parsing fails
-        const lines = text.split('\n').filter(line => line.trim());
-        jsonResponse = {
-          headline: lines[0] || `Happy ${input.occasion}, ${input.recipientName}!`,
-          line: lines[1] || `Wishing you joy and celebration on your special day.`
-        };
+        // Try to extract JSON from within the response
+        const jsonMatch = cleanText.match(/\{[^}]*"headline"[^}]*\}/);
+        if (jsonMatch) {
+          try {
+            jsonResponse = JSON.parse(jsonMatch[0]);
+          } catch {
+            // Still failed, use fallback
+            jsonResponse = null;
+          }
+        }
+        
+        if (!jsonResponse) {
+          // Fallback: extract content manually if JSON parsing fails
+          const lines = cleanText.split('\n').filter(line => line.trim() && !line.includes('{') && !line.includes('}'));
+          jsonResponse = {
+            headline: lines[0] || `Happy ${input.occasion}, ${input.recipientName}!`,
+            line: lines[1] || `Wishing you joy and celebration on your special day.`
+          };
+        }
       }
 
       // Validate response structure
